@@ -1,0 +1,39 @@
+interfaces {
+    fxp0 {
+        unit 0 {
+            family inet {
+                filter {
+                    input manager-ip;
+                }
+            }
+        }
+    }
+}
+policy-options {
+    prefix-list manager-ip {
+        {{ host['mgmt_svr_1'] }}/32;
+        {{ host['mgmt_svr_2'] }}/32;
+    }
+}
+firewall {
+    filter manager-ip {
+        term block_non_manager {
+            from {
+                source-address {
+                    0.0.0.0/0;
+                }
+                source-prefix-list {
+                    manager-ip except;
+                }
+                protocol tcp;
+                destination-port [ ssh https http ];
+            }
+            then {
+                discard;
+            }
+        }
+        term accept_everything_else {
+            then accept;
+        }
+    }
+}

@@ -1,0 +1,8 @@
+!
+ip access-list SSH_MGMT_SVRS
+   10 permit tcp host {{ host['mgmt_svr_1'] }} host {{ host['nornir_host'] }} eq ssh
+   20 permit tcp host {{ host['mgmt_svr_2'] }} host {{ host['nornir_host'] }} eq ssh
+   30 deny ip any any log
+!
+management ssh
+   ip access-group SSH_MGMT_SVRS in
