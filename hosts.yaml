@@ -1,6 +1,6 @@
 ---
 nxos-test:
-  nornir_host: 172.16.1.53
+  nornir_host: 172.16.1.54
   groups: ['default', 'Group1']
 
 arista-test:

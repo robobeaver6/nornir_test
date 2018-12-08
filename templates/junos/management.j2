@@ -11,8 +11,9 @@ interfaces {
 }
 policy-options {
     prefix-list manager-ip {
-        {{ host['mgmt_svr_1'] }}/32;
-        {{ host['mgmt_svr_2'] }}/32;
+        {% for server in host['mgmt_svrs'] %}
+        {{ server }}/32;
+        {% endfor %}
     }
 }
 firewall {

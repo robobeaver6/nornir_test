@@ -2,20 +2,24 @@
 
 
 default:
-  mgmt_svr_1: 192.168.1.20
-  mgmt_svr_2: 172.16.1.1
+  mgmt_svrs:
+    - 192.168.1.20
+    - 172.16.1.1
+    - 192.168.1.42
+    - 172.16.1.10
 
 Group1:
   nornir_username: cisco
   nornir_password: cisco
   nornir_nos: nxos
+  cert_key_name: CA_CERT
 
 Group2:
   nornir_username: admin
-  nornir_password: Adagio99
+  nornir_password: admin
   nornir_nos: eos
 
 Group3:
   nornir_username: admin
-  nornir_password: Adagio99
+  nornir_password: admin
   nornir_nos: junos

@@ -1,8 +1,9 @@
 
 ip access-list SSH_MGMT_SVRS
-  10 permit tcp {{ host['mgmt_svr_1'] }}/32 {{ host['nornir_host'] }}/32 eq 22
-  20 permit tcp {{ host['mgmt_svr_2'] }}/32 {{ host['nornir_host'] }}/32 eq 22
-  30 deny ip any any log
+{% for server in host['mgmt_svrs'] %}
+  {{ loop.index }} permit tcp {{ server }}/32 {{ host['nornir_host'] }}/32 eq 22
+{% endfor %}
+  999 deny ip any any log
 
 line vty
   access-class SSH_MGMT_SVRS in
