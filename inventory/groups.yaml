@@ -1,0 +1,26 @@
+---
+
+
+default:
+  data:
+    mgmt_svrs:
+      - 192.168.1.20
+      - 172.16.1.1
+      - 192.168.1.42
+      - 172.16.1.10
+    domain_name: localdomain
+
+Group1:
+  username: cisco
+  password: cisco
+  platform: nxos
+
+Group2:
+  username: admin
+  password: admin
+  platform: eos
+
+Group3:
+  username: admin
+  password: Admin1
+  platform: junos
