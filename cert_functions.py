@@ -7,7 +7,7 @@ import datetime
 import ipaddress
 
 
-def cry_create_key(length=2048):
+def create_key(length=2048):
     # Generate our key
     key = rsa.generate_private_key(
         public_exponent=65537,
@@ -17,7 +17,7 @@ def cry_create_key(length=2048):
     return key
 
 
-def cry_save_key(key, path, passphrase):
+def save_key(key, path, passphrase):
     # Write our key to disk for safe keeping
     with open(path, "wb") as f:
         f.write(key.private_bytes(
@@ -27,7 +27,9 @@ def cry_save_key(key, path, passphrase):
         ))
 
 
-def cry_load_key(path, passphrase):
+def load_key(path, passphrase):
+    if os.path.isfile(path):
+        ca_key = crypto.load_key(CA_KEY_PATH, ca_passphrase)
     with open(path, "rb") as f:
         key = serialization.load_pem_private_key(f.read(), passphrase.encode('utf-8'), default_backend())
     return key
@@ -83,17 +85,17 @@ def cry_create_self_signed_cert(key,
     return cert
 
 
-def cry_create_cert(csr,
-                    ca_key,
-                    ca_cert,
-                    lifetime=365,
-                    country_name="GB",
-                    state_or_province=None,
-                    locality=None,
-                    organisation=None,
-                    common_name=None,
-                    dns_list=[],
-                    ip_list=[]):
+def create_cert(csr,
+                ca_key,
+                ca_cert,
+                lifetime=365,
+                country_name="GB",
+                state_or_province=None,
+                locality=None,
+                organisation=None,
+                common_name=None,
+                dns_list=[],
+                ip_list=[]):
     # generate Subject Alternate Name list
     san_list = []
     for san in dns_list:
@@ -136,26 +138,26 @@ def cry_create_cert(csr,
     return cert
 
 
-def cry_save_cert(cert, path):
+def save_cert(cert, path):
     # Write our certificate out to disk.
     with open(path, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
 
 
-def cry_load_cert(path):
+def load_cert(path):
     with open(path, "rb") as f:
         cert = x509.load_pem_x509_certificate(f.read(), default_backend())
     return cert
 
 
-def cry_create_csr(key,
-                   country_name="GB",
-                   state_or_province=None,
-                   locality=None,
-                   organisation=None,
-                   common_name=None,
-                   dns_list=[],
-                   ip_list=[]):
+def create_csr(key,
+               country_name="GB",
+               state_or_province=None,
+               locality=None,
+               organisation=None,
+               common_name=None,
+               dns_list=[],
+               ip_list=[]):
     # generate Subject Alternate Name list
     san_list = []
     for san in dns_list:
@@ -186,7 +188,7 @@ def cry_create_csr(key,
     return csr
 
 
-def cry_save_csr(csr, path):
+def save_csr(csr, path):
     # Write our CSR out to disk.
     with open(path, "wb") as f:
         f.write(csr.public_bytes(serialization.Encoding.PEM))
@@ -198,17 +200,17 @@ def main():
     # ca_cert = cry_create_self_signed_cert(ca_key, common_name='ca.localdomain')
     # cry_save_cert(ca_cert, './certs/ca_cert.pem')
 
-    ca_key = cry_load_key('./certs/ca_key.pem', 'wibble')
-    ca_cert = cry_load_cert('./certs/ca_cert.pem')
+    ca_key = load_key('./certs/ca_key.pem', 'wibble')
+    ca_cert = load_cert('./certs/ca_cert.pem')
 
-    key = cry_create_key()
-    cry_save_key(key, './certs/host3_key.pem', 'wibble')
+    key = create_key()
+    save_key(key, './certs/host3_key.pem', 'wibble')
     dns_list = ["host3.otherdomain", "www.otherdomain"]
     ip_list = ['192.168.1.100', "192.168.1.101"]
-    csr = cry_create_csr(key, common_name='host3.localdomain',dns_list=dns_list, ip_list=ip_list)
+    csr = create_csr(key, common_name='host3.localdomain', dns_list=dns_list, ip_list=ip_list)
     # csr = cry_create_csr(key, common_name='host3.localdomain')
-    cert = cry_create_cert(csr, ca_key, ca_cert)
-    cry_save_cert(cert, './certs/host3_cert.pem')
+    cert = create_cert(csr, ca_key, ca_cert)
+    save_cert(cert, './certs/host3_cert.pem')
 
 
 
