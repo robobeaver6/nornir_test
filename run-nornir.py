@@ -133,7 +133,7 @@ def unpack(results, depth=0):
 def main():
     print_title("Playbook to configure the network")
     nr = InitNornir(config_file='config.yaml', dry_run=False)
-    # result = nr.run(task=disable_api_v2, name='Disable API Task')
+    result = nr.run(task=disable_api_v2, name='Disable API Task')
     # print_result(result, severity_level=logging.INFO)
     result = nr.run(task=task_wrangler, name='Main Task Wrangler')
     print_result(result, severity_level=logging.INFO)
