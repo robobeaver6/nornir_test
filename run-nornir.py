@@ -1,137 +1,144 @@
 import jinja2
-from nornir.core import InitNornir
+from nornir import InitNornir
+from nornir.core import task
 from nornir.plugins.tasks import networking, text
-from nornir.plugins.tasks.networking import napalm_get
+from nornir.plugins.tasks.networking import napalm_get, netmiko_send_command, netmiko_send_config
 from nornir.plugins.functions.text import print_title, print_result
 import napalm.base.exceptions
 import os
+import sys
 import logging
 from pprint import pprint
 import urllib3
+import cert_functions
+import re
 
-os.environ["REQUESTS_CA_BUNDLE"] = "certs/cacert.pem"
+os.environ["REQUESTS_CA_BUNDLE"] = "certs/ca_cert.pem"
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# nr = InitNornir(num_workers=1, dry_run=False)
 
-# result = nr.run(
-#             napalm_get,
-#             # getters Tested:
-#             # get_facts
-#             # get_arp_table
-#             # get_bgp_config
-#             # get_bgp_neighbors
-#             # get_bgp_neighbors_detail
-#             # get_config
-#             # get_environment
-#             # get_interfaces
-#             # get_interfaces_counters
-#             # get_interfaces_ip
-#             # get_ipv6_neighbors_table
-#             # get_lldp_neighbors
-#             # get_lldp_neighbors_detail
-#             # get_mac_address_table
-#             # get_network_instances
-#             # get_ntp_peers
-#             # get_ntp_servers
-#             # get_ntp_stats
-#             # get_optics
-#             # get_probes_results
-#             # get_route_to    -  Needs a destination= variable not sure how to pass it
-#             # get_snmp_information
-#             # get_users
-#             # is_alive - Doesn't work on nxos or eos
-#             getters=['get_config'])
-# print_result(result)
-
-# def basic_configuration(task):
-#     # Transform inventory data to configuration via a template file
-#     print("DEBUG: HOST:{} - MGMT_SVR:{}".format(task.host, task.host['mgmt_svrs']))
-#     try:
-#         # print("Create Config")
-#         r = task.run(task=text.template_file,
-#                      name="Base Configuration",
-#                      template="management.j2",
-#                      path="templates/{}".format(task.host.nos))
-#         task.host["config"] = r.result
-#     except jinja2.exceptions.TemplateNotFound:
-#         print("Template Not Found For {}".format(task.host))
-#
-#     # Deploy that configuration to the device using NAPALM
-#     print("Deploy Config {}".format(task.host))
-#
-#     task.run(task=networking.napalm_configure,
-#              name="Loading Configuration on the device",
-#              replace=False,
-#              configuration=task.host["config"])
-
-def ca_check_key(task):
-    # Does key already Exists?
-    cmd_check_key = 'show crypto key mypubkey rsa'
-    result = task.run(task=networking.netmiko_send_command,
-                      command_string=cmd_check_key,
+def check_api_status_v2(task):
+    # check status Cisco NXOS
+    if task.host.platform == 'nxos':
+        command_str='show feature | inc nxapi'
+        re_str = 'nxapi *[0-9]+ *(disabled|enabled)'
+    elif task.host.platform == 'eos':
+        command_str='sh management api http-commands | inc Enabled'
+        re_str = 'Enabled: *(Yes|No)'
+    elif task.host.platform == 'junos':
+        command_str='show configuration system services | display set'
+        re_str = '(set system services web-management http)'
+    else:
+        return None
+    result = task.run(task=netmiko_send_command,
+                      command_string=command_str,
+                      name='Check API Status Commands',
                       severity_level=logging.DEBUG)
-    key_list = []
-    for line in result.result.split('\n'):
-        # print(line)
-        if 'key label:' in line:
-            key_list.append(line.split(': ')[1])
-    if task.host['cert_key_name'] in key_list:
-        return True
+    re_status = re.search(re_str, result.result)
+    if re_status:
+        status = re_status.group(1)
+        if status == 'Yes' or status == 'enabled' or status == 'set system services web-management http':
+            return True
+    return False
+
+
+def enable_api_v2(task):
+    if task.host.platform == 'nxos':
+        config_commands = ['feature nxapi',
+                           'nxapi https port 443',
+                           'no nxapi http',
+                           ]
+
+    elif task.host.platform == 'eos':
+        config_commands = ['management api http-commands',
+                           'no shutdown',
+                           ]
+    elif task.host.platform == 'junos':
+        config_commands = ['set system services ssh',
+                           'set system services netconf ssh',
+                           'set system services web-management http',
+                           'commit'
+                           ]
     else:
-        return False
+        config_commands = ""
 
-
-def ca_enroll_root(task):
-    # CA Certificate
-    with open('certs/cacert.pem', 'r') as ca_cert_file:
-        ca_cert = ca_cert_file.readlines()
-    ca_cert += '\nEND OF INPUT\n'
-
-    # Create Key if required
-    if ca_check_key(task) is False:
-        cmd_str = 'crypto key generate rsa label {} modulus 2048'.format(task.host['cert_key_name'])
-        result = task.run(task=networking.netmiko_send_config,
-                          config_commands=cmd_str)
-        if not result.failed:
-            print('New Key Created')
+    if task.is_dry_run():
+        return config_commands
     else:
-        print('Key Already Exists')
+        task.run(task=netmiko_send_config,
+                 config_commands=config_commands,
+                 name='Enable API Commands')
 
-    # Create Trustpoint
-    cfg_trustpoint = task.run(task=text.template_file,
-                              name="Base Configuration",
-                              template="trustpoint.j2",
-                              path="templates/{}".format(task.host.nos))
 
-    result = task.run(task=networking.napalm_configure,
-                      configuration=cfg_trustpoint.result,
-                      severity_level=logging.DEBUG,
-                      dry_run=True
-                      )
+def disable_api_v2(task):
+    if task.host.platform == 'nxos':
+        config_commands = ['no feature nxapi',
+                           ]
 
-    print(result.diff)
+    elif task.host.platform == 'eos':
+        config_commands = ['no management api http-commands',
+                           ]
+    elif task.host.platform == 'junos':
+        config_commands = ['delete system services web-management http',
+                           'commit'
+                           ]
+    else:
+        config_commands = ""
 
-    # cmd_str = 'crypto ca authenticate {}'.format(task.host['cert_key_name'])
-    # print(cmd_str)
-    # result = task.run(task=networking.netmiko_send_command,
-    #                   command_string=cmd_str,
-    #                   expect_string='END OF INPUT :',
-    #                   severity_level=logging.DEBUG)
-    # print('Step 3')
-    # ca_cert += 'END OF INPUT\n'
-    # print(ca_cert)
-    # result = task.run(task=networking.netmiko_send_command,
-    #                   command_string=ca_cert)
+    if task.is_dry_run():
+        return config_commands
+    else:
+        task.run(task=netmiko_send_config,
+                 config_commands=config_commands,
+                 name='Disable API Task')
+
+    if check_api_status_v2(task):
+        return f"API Disabled"
+
+
+def task_wrangler(task):
+    result = task.run(check_api_status_v2,
+                      name='Pre Enable API Status Check',
+                      severity_level=logging.INFO)
+    # print(f"{task.host.name} Pre Check {task.host.platform} - {result.result}")
+    # sys.stdout.flush()
+    if result.result is False:
+        task.run(enable_api_v2,
+                 name='Enable API')
+        result = task.run(check_api_status_v2,
+                          name='Post Enable API Status Check',
+                          severity_level=logging.INFO)
+        # print(f"{task.host.name} Post Check {result.result}\n")
+        # sys.stdout.flush()
+        if result.result is False:
+            return f'ERROR: Unable to activate API on {task.host.name}'
+
+
+def unpack(results, depth=0):
+    if isinstance(results, task.AggregatedResult):
+        for key, value in results.items():
+            print('#' * depth, end='')
+            print(f" {key} {value.name} {type(value)}")
+            unpack(value, depth+1)
+    elif isinstance(results, task.MultiResult):
+        for mresult in results:
+            print('#' * depth, end='')
+            print(f" {mresult.name} {type(mresult)}")
+            unpack(mresult, depth + 1)
+    elif isinstance(results, task.Result):
+        print('#' * depth, end='')
+        print(f" {results.name} :\n {results.result}\n")
 
 
 def main():
     print_title("Playbook to configure the network")
-    nr = InitNornir(num_workers=1, dry_run=False)
-    filter_group = nr.filter(nornir_nos='nxos')
-    # result = nr.run(task=basic_configuration)
-    result = filter_group.run(task=ca_enroll_root)
-    print_result(result, severity_level=logging.DEBUG)
+    nr = InitNornir(config_file='config.yaml', dry_run=False)
+    # result = nr.run(task=disable_api_v2, name='Disable API Task')
+    # print_result(result, severity_level=logging.INFO)
+    result = nr.run(task=task_wrangler, name='Main Task Wrangler')
+    print_result(result, severity_level=logging.INFO)
+
+    # unpack(result)
 
 
 if __name__ == "__main__":
