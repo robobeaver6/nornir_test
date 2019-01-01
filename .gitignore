@@ -3,3 +3,6 @@
 certs/*
 scratch.py
 venv/*
+tests/tmp
+tests/*.pem
+ssl/*
