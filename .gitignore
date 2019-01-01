@@ -2,3 +2,4 @@
 *.log
 certs/*
 scratch.py
+venv/*
