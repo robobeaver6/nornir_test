@@ -267,8 +267,16 @@ def test_save_and_load_user_cert(user_cert):
     assert cry.get_cert_bytes(user_cert) == cry.get_cert_bytes(key2)
 
 
-def test_get_host_cert_expiry():
-    assert isinstance(cry.get_host_cert_expiry('www.bbc.com', 443), datetime)
+def test_get_cert_expiry(user_cert):
+    assert isinstance(user_cert.not_valid_after, datetime)
+
+
+def test_get_host_cert():
+    assert isinstance(cry.get_host_cert('www.bbc.com', 443), x509.Certificate)
+
+
+def test_cert_is_issued_by(user_cert, ra_cert):
+    assert cry.cert_is_issued_by(user_cert, ra_cert) is True
 
 
 def test_generate_host_key_pair(root_ca_key, root_ca_cert):
