@@ -7,6 +7,7 @@ import os
 import ssl
 import datetime
 import ipaddress
+from pprint import pprint
 
 
 def get_key_bytes(key):
@@ -69,6 +70,7 @@ def load_csr(path):
     except FileNotFoundError:
         print(f'CSR File {path} Not Found')
         exit(1)
+
 
 def create_key(length=2048):
     # Generate our key
@@ -255,10 +257,32 @@ def create_csr(key,
     return csr
 
 
-def get_host_cert_expiry(hostname, port):
-    cert_str = ssl.get_server_certificate((hostname, port))
-    cert = x509.load_pem_x509_certificate(cert_str.encode('utf-8'), default_backend())
+def get_cert_expiry(cert):
     return cert.not_valid_after
+
+
+def get_host_cert(hostname, port):
+    try:
+        cert_str = ssl.get_server_certificate((hostname, port))
+        cert = x509.load_pem_x509_certificate(cert_str.encode('utf-8'), default_backend())
+        assert isinstance(cert, x509.Certificate)
+        return cert
+    except ValueError as e:
+        print(f"Cert Error: {e}")
+
+
+def get_authority_key_identifier(cert: x509.Certificate) -> bytes:
+    return cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_KEY_IDENTIFIER).value.key_identifier
+
+
+def cert_is_issued_by(cert, ca_cert):
+    try:
+        # check Authority Key Identifier matches issuing certs Subject Key Identifier
+        return cert.extensions.get_extension_for_oid(
+            ExtensionOID.AUTHORITY_KEY_IDENTIFIER).value.key_identifier == ca_cert.extensions.get_extension_for_oid(
+            ExtensionOID.SUBJECT_KEY_IDENTIFIER).value.digest
+    except x509.extensions.ExtensionNotFound:
+        return False
 
 
 def generate_host_keypair(hostname, ca_key, ca_cert, domainname='testdomain.com'):
@@ -267,7 +291,8 @@ def generate_host_keypair(hostname, ca_key, ca_cert, domainname='testdomain.com'
     if len(ca_cert.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)) > 0:
         subject['country_name'] = ca_cert.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)[0].value
     if len(ca_cert.subject.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME)) > 0:
-        subject['state_or_province'] = ca_cert.subject.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME)[0].value
+        subject['state_or_province'] = ca_cert.subject.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME)[
+            0].value
     if len(ca_cert.subject.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME)) > 0:
         subject['locality'] = ca_cert.subject.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME)[0].value
     if len(ca_cert.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)) > 0:
@@ -292,19 +317,19 @@ def main():
     ca_key = create_key(2048)
     ca_csr = create_csr(ca_key, common_name='ca.localdomain', is_ca=True)
     ca_cert = create_cert(ca_key, csr=ca_csr, is_ca=True)
-    save_key(ca_key, './cert_auth/certs/ca_test_key.pem', 'wibble')
-    save_cert(ca_cert, './cert_auth/certs/ca_test_cert.pem')
+    save_key(ca_key, './tests/tmp/ca_test_key.pem', 'wibble')
+    save_cert(ca_cert, './tests/tmp/ca_test_cert.pem')
 
-    ca_key = load_key('./cert_auth/certs/ca_test_key.pem', 'wibble')
-    ca_cert = load_cert('./cert_auth/certs/ca_test_cert.pem')
+    ca_key = load_key('./tests/tmp/ca_test_key.pem', 'wibble')
+    ca_cert = load_cert('./tests/tmp/ca_test_cert.pem')
 
     key = create_key()
-    save_key(key, './cert_auth/certs/test_host1_key.pem', 'wibble')
+    save_key(key, './tests/tmp/test_host1_key.pem', 'wibble')
     dns_list = ["host1.otherdomain", "www.otherdomain"]
     ip_list = ['192.168.1.100', "192.168.1.101"]
     csr = create_csr(key, common_name='host1.localdomain', dns_list=dns_list, ip_list=ip_list)
     cert = create_cert(ca_key, ca_cert, csr)
-    save_cert(cert, './cert_auth/certs/host1_cert.pem')
+    save_cert(cert, './tests/tmp/host1_cert.pem')
 
 
 if __name__ == '__main__':
