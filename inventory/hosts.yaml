@@ -1,18 +1,24 @@
 ---
 nxos-test:
-  hostname: 172.16.1.56
+  hostname: nxos.testdomain.com
   groups:
     - default
     - Group1
+  data:
+    ipv4: 172.16.1.56
 
 arista-test:
-  hostname: 192.168.1.59
+  hostname: arista.testdomain.com
   groups:
     - default
     - Group2
+  data:
+    ipv4: 192.168.1.59
 
 juniper-test:
-  hostname: 192.168.1.39
+  hostname: juniper.testdomain.com
   groups:
     - default
     - Group3
+  data:
+    ipv4: 192.168.1.39
